@@ -1,13 +1,16 @@
 package prunerecent
 
+import java.io.IOException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 
 // Plain file logic, kept free of IntelliJ APIs so it can be unit tested.
 
 private val leftoverRootNames = setOf(".idea", ".DS_Store")
-private val leftoverIdeaNames = setOf("workspace.xml", ".DS_Store")
 
 enum class Verdict { KEEP, REMOVE_ENTRY, DELETE_FOLDER_AND_REMOVE_ENTRY }
 
@@ -21,17 +24,13 @@ private fun names(dir: Path): Set<String> =
 
 private fun isRegularFile(path: Path) = Files.isRegularFile(path, NOFOLLOW_LINKS)
 
-// True when the folder holds only the .idea/workspace.xml PyCharm writes back on close.
+// True when the folder holds only the .idea folder PyCharm writes back on close.
 fun isLeftover(dir: Path): Boolean {
     if (!Files.isDirectory(dir, NOFOLLOW_LINKS)) return false
     val root = names(dir)
     if (".idea" !in root || !leftoverRootNames.containsAll(root)) return false
     if (".DS_Store" in root && !isRegularFile(dir.resolve(".DS_Store"))) return false
-    val idea = dir.resolve(".idea")
-    if (!Files.isDirectory(idea, NOFOLLOW_LINKS)) return false
-    val inner = names(idea)
-    if ("workspace.xml" !in inner || !leftoverIdeaNames.containsAll(inner)) return false
-    return inner.all { isRegularFile(idea.resolve(it)) }
+    return Files.isDirectory(dir.resolve(".idea"), NOFOLLOW_LINKS)
 }
 
 fun isStrictlyUnder(dir: Path, root: Path): Boolean {
@@ -49,11 +48,25 @@ fun verdict(dir: Path, openPaths: Set<Path>, codeRoot: Path): Verdict = when {
     else -> Verdict.REMOVE_ENTRY
 }
 
-// Never recursive: directory deletes fail if anything else appeared in the meantime.
+// Does not follow symlinks: a link inside .idea is removed, never its target.
+private fun deleteTree(dir: Path) {
+    Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
+        override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+            Files.delete(file)
+            return FileVisitResult.CONTINUE
+        }
+
+        override fun postVisitDirectory(d: Path, e: IOException?): FileVisitResult {
+            if (e != null) throw e
+            Files.delete(d)
+            return FileVisitResult.CONTINUE
+        }
+    })
+}
+
+// Only .idea is deleted recursively; the project folder delete fails if anything else appeared.
 fun deleteLeftover(dir: Path) {
-    val idea = dir.resolve(".idea")
-    for (name in leftoverIdeaNames) Files.deleteIfExists(idea.resolve(name))
-    Files.delete(idea)
+    deleteTree(dir.resolve(".idea"))
     Files.deleteIfExists(dir.resolve(".DS_Store"))
     Files.delete(dir)
 }

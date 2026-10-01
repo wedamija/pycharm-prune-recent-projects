@@ -2,14 +2,14 @@
 
 A [LivePlugin](https://github.com/dkandalov/live-plugin) script that removes dead entries from PyCharm's recent projects list while the IDE is running.
 
-An entry is dead when its folder is missing, or when the folder holds only `.idea/workspace.xml` (plus `.DS_Store`). PyCharm writes that file back when you close a project whose worktree was removed.
+An entry is dead when its folder is missing, or when the folder holds only `.idea` (plus `.DS_Store`). PyCharm writes `.idea` back when you close a project whose worktree was removed.
 
 ## Behaviour
 
 - Runs when loaded, then every 30 minutes.
 - Never touches an open project.
 - Removes the entry through `RecentProjectsManager.removePath`, so PyCharm saves the pruned list itself.
-- Deletes a leftover folder only when its real path is inside `~/code`. Files are deleted one by one and the folders are removed only if empty, so nothing else is ever deleted.
+- Deletes a leftover folder only when its real path is inside `~/code`. Only `.idea` is deleted recursively, without following symlinks. The project folder is then removed only if empty, so nothing else is ever deleted.
 - Logs each removal to `idea.log` under `PruneRecentProjects`.
 - Adds a **Remove Missing Recent Projects** action (Find Action) to prune on demand.
 

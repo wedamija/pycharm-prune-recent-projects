@@ -104,18 +104,26 @@ class PruneTest {
     }
 
     @Test
-    fun `extra idea file is kept`() {
+    fun `leftover with other idea files is deleted`() {
         val dir = leftover(codeRoot.resolve("wt"))
-        file(dir.resolve(".idea/modules.xml"))
-        assertEquals(emptyList(), run(dir))
-        assertTrue(dir.resolve(".idea/modules.xml").exists())
+        file(dir.resolve(".idea/seer.iml"))
+        file(dir.resolve(".idea/inspectionProfiles/profiles_settings.xml"))
+        assertEquals(listOf(dir.toString()), run(dir))
+        assertFalse(dir.exists())
     }
 
     @Test
-    fun `idea folder without workspace xml is kept`() {
+    fun `empty idea folder is deleted`() {
         val dir = codeRoot.resolve("wt").resolve(".idea").createDirectories().parent
+        assertEquals(listOf(dir.toString()), run(dir))
+        assertFalse(dir.exists())
+    }
+
+    @Test
+    fun `idea file as a plain file is kept`() {
+        val dir = file(codeRoot.resolve("wt/.idea")).parent
         assertEquals(emptyList(), run(dir))
-        assertTrue(dir.exists())
+        assertTrue(dir.resolve(".idea").exists())
     }
 
     @Test
@@ -151,11 +159,14 @@ class PruneTest {
     }
 
     @Test
-    fun `symlinked workspace xml is kept`() {
-        val target = file(outside.resolve("workspace.xml"))
+    fun `symlink inside idea is deleted without touching its target`() {
+        val target = file(outside.resolve("target/workspace.xml"))
         val dir = codeRoot.resolve("wt")
-        dir.resolve(".idea").createDirectories().resolve("workspace.xml").createSymbolicLinkPointingTo(target)
-        assertEquals(emptyList(), run(dir))
+        val idea = dir.resolve(".idea").createDirectories()
+        idea.resolve("workspace.xml").createSymbolicLinkPointingTo(target)
+        idea.resolve("linked-dir").createSymbolicLinkPointingTo(target.parent)
+        assertEquals(listOf(dir.toString()), run(dir))
+        assertFalse(dir.exists())
         assertTrue(target.exists())
     }
 
@@ -166,14 +177,6 @@ class PruneTest {
         val viaLink = codeRoot.resolve("elsewhere/wt")
         assertEquals(listOf(viaLink.toString()), run(viaLink))
         assertTrue(real.resolve(".idea/workspace.xml").exists())
-    }
-
-    @Test
-    fun `delete stops when an unexpected file appeared in idea`() {
-        val dir = leftover(codeRoot.resolve("wt"))
-        val extra = file(dir.resolve(".idea/new.xml"))
-        assertFailsWith<DirectoryNotEmptyException> { deleteLeftover(dir) }
-        assertTrue(extra.exists())
     }
 
     @Test
